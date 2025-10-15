@@ -4,7 +4,7 @@ import {
   addConnection, 
   removeConnection,
   getActiveUsers 
-} from '../../../../lib/ephemeral-store';
+} from '../../../../../lib/ephemeral-store';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,6 +41,7 @@ export async function GET(request, { params }) {
         controller.close();
       };
       
+      // Handle client disconnect
       if (request.socket) {
         request.socket.on('close', cleanupHandler);
         request.socket.on('error', cleanupHandler);
