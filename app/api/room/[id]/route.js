@@ -35,8 +35,13 @@ function removeConnection(roomId, connectionId) {
   if (connections.size === 0) {
     rooms.delete(roomId);
     roomConnections.delete(roomId);
-    // ✅ Messages and connections fully purged
   }
+}
+
+// 🔥 New: Force-delete a room (e.g., when user clicks "Close Chat")
+function closeRoom(roomId) {
+  rooms.delete(roomId);
+  roomConnections.delete(roomId);
 }
 
 function getActiveUsers(roomId) {
@@ -49,6 +54,7 @@ export async function GET(request, { params }) {
   return NextResponse.json({
     messages: room?.messages || [],
     activeUsers: room ? getActiveUsers(roomId) : 0,
+    exists: !!room, // helpful for frontend to know if room was closed
   });
 }
 
@@ -75,10 +81,17 @@ export async function POST(request, { params }) {
 export async function PUT(request, { params }) {
   const { id: roomId } = params;
   const { action, connectionId } = await request.json();
+
   if (action === 'join') {
     addConnection(roomId, connectionId);
   } else if (action === 'leave') {
     removeConnection(roomId, connectionId);
+  } else if (action === 'close') {
+    // 🔥 Anyone can close the room (you could add auth later if needed)
+    closeRoom(roomId);
+  } else {
+    return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   }
+
   return NextResponse.json({ success: true });
 }
