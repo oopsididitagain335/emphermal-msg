@@ -1,0 +1,35 @@
+{
+  "name": "ephemeral-chat",
+  "version": "1.0.0",
+  "description": "Global real-time ephemeral chat with zero persistence. Messages vanish instantly when users leave.",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "14.2.3",
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  },
+  "devDependencies": {
+    "eslint": "8.57.0",
+    "eslint-config-next": "14.2.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "ephemeral",
+    "chat",
+    "realtime",
+    "no-database",
+    "privacy",
+    "nextjs",
+    "server-sent-events"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
