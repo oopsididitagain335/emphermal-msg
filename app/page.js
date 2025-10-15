@@ -8,21 +8,31 @@ export default function HomePage() {
   const router = useRouter();
   const [roomName, setRoomName] = useState('');
 
-  const handleCreateRoom = () => {
+  const handleCreateRoom = async () => {
     const name = roomName.trim();
     if (!name) return;
-    router.push(`/room/${encodeURIComponent(name)}`);
+
+    const res = await fetch('/api/room', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+
+    if (res.ok) {
+      const { id } = await res.json();
+      router.push(`/room/${encodeURIComponent(name)}/${id}`);
+    }
   };
 
   return (
     <div style={{ padding: '2rem', fontFamily: 'system-ui, sans-serif' }}>
-      <h1>💬 Create a Chat Room</h1>
+      <h1>💬 Create a Private Chat Room</h1>
       <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
         <input
           type="text"
           value={roomName}
           onChange={(e) => setRoomName(e.target.value)}
-          placeholder="Enter room name"
+          placeholder="Room name (for URL)"
           style={{
             padding: '0.6rem',
             fontSize: '1rem',
