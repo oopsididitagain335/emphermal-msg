@@ -1,13 +1,19 @@
-// app/api/room/[id]/route.js
 import { NextResponse } from 'next/server';
-import { createRoom, getRoom, addMessage, addConnection, removeConnection } from '@/lib/ephemeral-store';
+import { 
+  createRoom, 
+  getRoom, 
+  addMessage, 
+  addConnection, 
+  removeConnection,
+  getActiveUsers 
+} from '../../../../lib/ephemeral-store';
 
 export async function GET(request, { params }) {
   const { id: roomId } = params;
   const room = getRoom(roomId);
   return NextResponse.json({ 
     messages: room?.messages || [],
-    activeUsers: room ? (require('@/lib/ephemeral-store').getActiveUsers(roomId)) : 0
+    activeUsers: room ? getActiveUsers(roomId) : 0
   });
 }
 
@@ -30,7 +36,6 @@ export async function POST(request, { params }) {
   return NextResponse.json({ success });
 }
 
-// Handle connection lifecycle
 export async function PUT(request, { params }) {
   const { id: roomId } = params;
   const { action, connectionId } = await request.json();
