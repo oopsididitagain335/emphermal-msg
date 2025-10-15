@@ -15,6 +15,7 @@ export default function RoomPage() {
   const [activeUsers, setActiveUsers] = useState(0);
   const [username, setUsername] = useState('');
   const [text, setText] = useState('');
+  const [roomExists, setRoomExists] = useState(true); // Track if room still exists
 
   useEffect(() => {
     if (!roomId) return;
@@ -28,7 +29,7 @@ export default function RoomPage() {
       sessionStorage.setItem(storageKey, connectionId);
     }
 
-    // Join
+    // Join the room
     fetch(`/api/room/${roomId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -55,14 +56,27 @@ export default function RoomPage() {
     };
   }, [roomId]);
 
+  // Poll room data (messages, users, existence)
   useEffect(() => {
     if (!roomId) return;
+
     const interval = setInterval(async () => {
-      const res = await fetch(`/api/room/${roomId}`);
-      const data = await res.json();
-      setMessages(data.messages || []);
-      setActiveUsers(data.activeUsers || 0);
+      try {
+        const res = await fetch(`/api/room/${roomId}`);
+        if (res.status === 404) {
+          setRoomExists(false);
+          clearInterval(interval);
+          return;
+        }
+        const data = await res.json();
+        setMessages(data.messages || []);
+        setActiveUsers(data.activeUsers || 0);
+        setRoomExists(data.exists !== false); // fallback if not sent
+      } catch (err) {
+        console.error('Failed to fetch room data:', err);
+      }
     }, 1000);
+
     return () => clearInterval(interval);
   }, [roomId]);
 
@@ -77,7 +91,52 @@ export default function RoomPage() {
     setText('');
   };
 
+  const handleCloseChat = async () => {
+    if (!confirm('Are you sure you want to close this chat? All messages will be permanently deleted.')) {
+      return;
+    }
+
+    try {
+      await fetch(`/api/room/${roomId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'close' }),
+      });
+
+      // Optional: leave the room explicitly (not strictly needed since it's deleted)
+      const connectionId = sessionStorage.getItem(`conn_${roomId}`);
+      if (connectionId) {
+        await fetch(`/api/room/${roomId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'leave', connectionId }),
+        });
+      }
+
+      alert('Chat closed successfully.');
+      router.push('/'); // Redirect to home
+    } catch (err) {
+      console.error('Failed to close chat:', err);
+      alert('Failed to close chat. Please try again.');
+    }
+  };
+
   if (!roomId) return <div>Loading...</div>;
+
+  if (!roomExists) {
+    return (
+      <div style={{ padding: '2rem', fontFamily: 'system-ui, sans-serif' }}>
+        <h2>Chat Closed</h2>
+        <p>This chat room has been deleted.</p>
+        <button
+          onClick={() => router.push('/')}
+          style={{ marginTop: '1rem', padding: '0.5rem', fontSize: '1rem' }}
+        >
+          ← Back to Home
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: '2rem', fontFamily: 'system-ui, sans-serif' }}>
@@ -129,9 +188,25 @@ export default function RoomPage() {
         </button>
       </form>
 
+      {/* 🔥 Close Chat Button */}
+      <button
+        onClick={handleCloseChat}
+        style={{
+          marginTop: '1rem',
+          padding: '0.5rem 1rem',
+          backgroundColor: '#ff4444',
+          color: 'white',
+          border: 'none',
+          borderRadius: '4px',
+          cursor: 'pointer',
+        }}
+      >
+        Close Chat
+      </button>
+
       <button
         onClick={() => router.push('/')}
-        style={{ marginTop: '1rem', padding: '0.5rem', fontSize: '1rem' }}
+        style={{ marginTop: '1rem', padding: '0.5rem', fontSize: '1rem', marginLeft: '0.5rem' }}
       >
         ← Back to Home
       </button>
