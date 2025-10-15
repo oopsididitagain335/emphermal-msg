@@ -16,27 +16,25 @@ export default function RoomPage() {
   const [username, setUsername] = useState('');
   const [text, setText] = useState('');
 
-  // 🔑 Generate or reuse connection ID per tab
   useEffect(() => {
     if (!roomId) return;
 
-    // Use sessionStorage to persist connection ID across refreshes in the same tab
-    const storageKey = `room-${roomId}-connectionId`;
+    const storageKey = `conn_${roomId}`;
     let connectionId = sessionStorage.getItem(storageKey);
-
     if (!connectionId) {
-      connectionId = Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
+      connectionId = crypto.randomUUID
+        ? crypto.randomUUID()
+        : Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
       sessionStorage.setItem(storageKey, connectionId);
     }
 
-    // Join room with stable connection ID
+    // Join
     fetch(`/api/room/${roomId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'join', connectionId }),
     });
 
-    // Cleanup on tab close or navigation
     const handleBeforeUnload = () => {
       fetch(`/api/room/${roomId}`, {
         method: 'PUT',
@@ -49,7 +47,6 @@ export default function RoomPage() {
 
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      // Also leave on unmount (e.g., navigate away)
       fetch(`/api/room/${roomId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -58,7 +55,6 @@ export default function RoomPage() {
     };
   }, [roomId]);
 
-  // Poll for messages and user count
   useEffect(() => {
     if (!roomId) return;
     const interval = setInterval(async () => {
@@ -73,14 +69,12 @@ export default function RoomPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!username.trim() || !text.trim()) return;
-
-    const res = await fetch(`/api/room/${roomId}`, {
+    await fetch(`/api/room/${roomId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: username.trim(), text: text.trim() }),
     });
-
-    if (res.ok) setText('');
+    setText('');
   };
 
   if (!roomId) return <div>Loading...</div>;
