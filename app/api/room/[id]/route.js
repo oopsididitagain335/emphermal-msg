@@ -1,7 +1,6 @@
 // app/api/room/[id]/route.js
 import { NextResponse } from 'next/server';
 
-// =============== IN-MEMORY STORE (NO IMPORTS!) ===============
 const rooms = new Map();
 const roomConnections = new Map();
 
@@ -10,7 +9,6 @@ function createRoom(roomId) {
     rooms.set(roomId, { messages: [], createdAt: Date.now() });
     roomConnections.set(roomId, new Set());
   }
-  return rooms.get(roomId);
 }
 
 function getRoom(roomId) {
@@ -19,12 +17,10 @@ function getRoom(roomId) {
 
 function addMessage(roomId, message) {
   const room = getRoom(roomId);
-  if (room) {
-    room.messages.push(message);
-    if (room.messages.length > 100) room.messages.shift();
-    return true;
-  }
-  return false;
+  if (!room) return false;
+  room.messages.push(message);
+  if (room.messages.length > 100) room.messages.shift();
+  return true;
 }
 
 function addConnection(roomId, connectionId) {
@@ -39,14 +35,13 @@ function removeConnection(roomId, connectionId) {
   if (connections.size === 0) {
     rooms.delete(roomId);
     roomConnections.delete(roomId);
-    console.log(`🗑️ Room ${roomId} DELETED`);
+    // ✅ Messages and connections fully purged
   }
 }
 
 function getActiveUsers(roomId) {
   return roomConnections.get(roomId)?.size || 0;
 }
-// ==========================================================
 
 export async function GET(request, { params }) {
   const { id: roomId } = params;
@@ -63,14 +58,18 @@ export async function POST(request, { params }) {
   if (!username || !text) {
     return NextResponse.json({ error: 'Invalid input' }, { status: 400 });
   }
+  const room = getRoom(roomId);
+  if (!room) {
+    return NextResponse.json({ error: 'Room not active' }, { status: 404 });
+  }
   const message = {
     id: Date.now().toString(),
     username: username.trim(),
     text: text.trim(),
     timestamp: new Date().toISOString(),
   };
-  const success = addMessage(roomId, message);
-  return NextResponse.json({ success });
+  addMessage(roomId, message);
+  return NextResponse.json({ success: true });
 }
 
 export async function PUT(request, { params }) {
