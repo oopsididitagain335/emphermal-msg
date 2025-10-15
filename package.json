@@ -1,7 +1,7 @@
 {
   "name": "ephemeral-chat",
   "version": "1.0.0",
-  "description": "Global real-time ephemeral chat with zero persistence. Messages vanish instantly when users leave.",
+  "description": "Global real-time ephemeral chat with zero persistence. Messages are triple-encrypted at rest and auto-deleted the moment the last user leaves — no traces ever remain.",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -12,7 +12,8 @@
   "dependencies": {
     "next": "14.2.3",
     "react": "18.2.0",
-    "react-dom": "18.2.0"
+    "react-dom": "18.2.0",
+    "mongodb": "^6.8.0"
   },
   "devDependencies": {
     "eslint": "8.57.0",
@@ -25,11 +26,23 @@
     "ephemeral",
     "chat",
     "realtime",
-    "no-database",
+    "mongodb",
+    "encryption",
     "privacy",
+    "aes-256",
+    "zero-persistence",
     "nextjs",
-    "server-sent-events"
+    "server-sent-events",
+    "secure-chat"
   ],
   "author": "Your Name",
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/ephemeral-chat.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/ephemeral-chat/issues"
+  },
+  "homepage": "https://github.com/your-username/ephemeral-chat#readme"
 }
