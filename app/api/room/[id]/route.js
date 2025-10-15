@@ -1,20 +1,19 @@
 // app/api/room/[id]/route.js
 import { NextResponse } from 'next/server';
 import {
-  createRoom,
   getRoom,
   addMessage,
   addConnection,
   removeConnection,
-  getActiveUsers
-} from '../../../lib/ephemeral-store.js'; // ✅ .js extension added
+  getActiveUsers,
+} from '../../../lib/ephemeral-store.js'; // ← .js EXTENSION REQUIRED
 
 export async function GET(request, { params }) {
   const { id: roomId } = params;
   const room = getRoom(roomId);
   return NextResponse.json({
     messages: room?.messages || [],
-    activeUsers: room ? getActiveUsers(roomId) : 0
+    activeUsers: room ? getActiveUsers(roomId) : 0,
   });
 }
 
@@ -30,7 +29,7 @@ export async function POST(request, { params }) {
     id: Date.now().toString(),
     username: username.trim(),
     text: text.trim(),
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   };
 
   const success = addMessage(roomId, message);
