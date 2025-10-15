@@ -1,17 +1,13 @@
 // app/api/room/[id]/route.js
 import { NextResponse } from 'next/server';
 
-// =============== EMBEDDED STORE (NO IMPORTS!) ===============
-// This eliminates ALL "module not found" errors
+// =============== IN-MEMORY STORE (NO IMPORTS!) ===============
 const rooms = new Map();
-const roomConnections = new Map(); // roomId => Set of connection IDs
+const roomConnections = new Map();
 
 function createRoom(roomId) {
   if (!rooms.has(roomId)) {
-    rooms.set(roomId, {
-      messages: [],
-      createdAt: Date.now(),
-    });
+    rooms.set(roomId, { messages: [], createdAt: Date.now() });
     roomConnections.set(roomId, new Set());
   }
   return rooms.get(roomId);
@@ -39,13 +35,11 @@ function addConnection(roomId, connectionId) {
 function removeConnection(roomId, connectionId) {
   const connections = roomConnections.get(roomId);
   if (!connections) return;
-
   connections.delete(connectionId);
-
   if (connections.size === 0) {
     rooms.delete(roomId);
     roomConnections.delete(roomId);
-    console.log(`🗑️ Room ${roomId} DELETED - no active users`);
+    console.log(`🗑️ Room ${roomId} DELETED`);
   }
 }
 
@@ -66,18 +60,15 @@ export async function GET(request, { params }) {
 export async function POST(request, { params }) {
   const { id: roomId } = params;
   const { username, text } = await request.json();
-
   if (!username || !text) {
     return NextResponse.json({ error: 'Invalid input' }, { status: 400 });
   }
-
   const message = {
     id: Date.now().toString(),
     username: username.trim(),
     text: text.trim(),
     timestamp: new Date().toISOString(),
   };
-
   const success = addMessage(roomId, message);
   return NextResponse.json({ success });
 }
@@ -85,12 +76,10 @@ export async function POST(request, { params }) {
 export async function PUT(request, { params }) {
   const { id: roomId } = params;
   const { action, connectionId } = await request.json();
-
   if (action === 'join') {
     addConnection(roomId, connectionId);
   } else if (action === 'leave') {
     removeConnection(roomId, connectionId);
   }
-
   return NextResponse.json({ success: true });
 }
