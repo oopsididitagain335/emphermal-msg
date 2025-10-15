@@ -1,80 +1,78 @@
 // app/api/room/[id]/route.js
 import { NextResponse } from 'next/server';
+import client from '@/lib/mongodb';
+import { encryptTriple } from '@/lib/crypto';
 
-const rooms = new Map();
-const roomConnections = new Map();
+const DB_NAME = 'chatapp';
+const COLLECTION_NAME = 'rooms';
 
-function createRoom(roomId) {
-  if (!rooms.has(roomId)) {
-    rooms.set(roomId, { messages: [], createdAt: Date.now() });
-    roomConnections.set(roomId, new Set());
-  }
+async function getCollection() {
+  await client.connect();
+  return client.db(DB_NAME).collection(COLLECTION_NAME);
 }
 
-function getRoom(roomId) {
-  return rooms.get(roomId);
-}
-
-function addMessage(roomId, message) {
-  const room = getRoom(roomId);
-  if (!room) return false;
-  room.messages.push(message);
-  if (room.messages.length > 100) room.messages.shift();
-  return true;
-}
-
-function addConnection(roomId, connectionId) {
-  createRoom(roomId);
-  roomConnections.get(roomId).add(connectionId);
-}
-
-function removeConnection(roomId, connectionId) {
-  const connections = roomConnections.get(roomId);
-  if (!connections) return;
-  connections.delete(connectionId);
-  if (connections.size === 0) {
-    rooms.delete(roomId);
-    roomConnections.delete(roomId);
-  }
-}
-
-// 🔥 New: Force-delete a room (e.g., when user clicks "Close Chat")
-function closeRoom(roomId) {
-  rooms.delete(roomId);
-  roomConnections.delete(roomId);
-}
-
-function getActiveUsers(roomId) {
-  return roomConnections.get(roomId)?.size || 0;
+// Helper: delete room immediately
+async function deleteRoom(roomId) {
+  const collection = await getCollection();
+  await collection.deleteOne({ _id: roomId });
 }
 
 export async function GET(request, { params }) {
   const { id: roomId } = params;
-  const room = getRoom(roomId);
+  const collection = await getCollection();
+  const room = await collection.findOne({ _id: roomId });
+
+  if (!room) {
+    return NextResponse.json({
+      messages: [],
+      activeUsers: 0,
+      exists: false,
+    });
+  }
+
+  // We don't decrypt here — frontend doesn't need to see messages via GET
+  // (Messages are only shown via real-time polling of encrypted data,
+  // but decryption happens on frontend if you send key — which we DON'T)
+  // 👉 Actually: we won't send messages via GET at all for security.
+  // Instead, we only send active user count. Messages are handled via POST + client-side echo.
+
   return NextResponse.json({
-    messages: room?.messages || [],
-    activeUsers: room ? getActiveUsers(roomId) : 0,
-    exists: !!room, // helpful for frontend to know if room was closed
+    activeUsers: room.activeConnections || 0,
+    exists: true,
   });
 }
 
 export async function POST(request, { params }) {
   const { id: roomId } = params;
   const { username, text } = await request.json();
+
   if (!username || !text) {
     return NextResponse.json({ error: 'Invalid input' }, { status: 400 });
   }
-  const room = getRoom(roomId);
+
+  const collection = await getCollection();
+  const room = await collection.findOne({ _id: roomId });
   if (!room) {
     return NextResponse.json({ error: 'Room not active' }, { status: 404 });
   }
+
+  // ✅ Encrypt message 3x
+  const encryptedText = encryptTriple(text.trim());
+  const encryptedUsername = encryptTriple(username.trim());
+
   const message = {
     id: Date.now().toString(),
-    username: username.trim(),
-    text: text.trim(),
+    username: encryptedUsername,
+    text: encryptedText,
     timestamp: new Date().toISOString(),
   };
-  addMessage(roomId, message);
+
+  // Push to DB (only while room exists)
+  await collection.updateOne(
+    { _id: roomId },
+    { $push: { messages: { $each: [message], $slice: -100 } } }
+  );
+
   return NextResponse.json({ success: true });
 }
 
@@ -82,15 +80,36 @@ export async function PUT(request, { params }) {
   const { id: roomId } = params;
   const { action, connectionId } = await request.json();
 
+  const collection = await getCollection();
+
   if (action === 'join') {
-    addConnection(roomId, connectionId);
-  } else if (action === 'leave') {
-    removeConnection(roomId, connectionId);
-  } else if (action === 'close') {
-    // 🔥 Anyone can close the room (you could add auth later if needed)
-    closeRoom(roomId);
-  } else {
-    return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+    await collection.updateOne(
+      { _id: roomId },
+      {
+        $setOnInsert: { createdAt: new Date(), activeConnections: 0, messages: [] },
+        $inc: { activeConnections: 1 }
+      },
+      { upsert: true }
+    );
+  } 
+  else if (action === 'leave') {
+    const room = await collection.findOne({ _id: roomId });
+    if (!room) return NextResponse.json({ success: true });
+
+    const newCount = Math.max(0, (room.activeConnections || 1) - 1);
+    if (newCount === 0) {
+      // 🔥 LAST USER LEFT → DELETE ENTIRE ROOM
+      await deleteRoom(roomId);
+    } else {
+      await collection.updateOne(
+        { _id: roomId },
+        { $set: { activeConnections: newCount } }
+      );
+    }
+  } 
+  else if (action === 'close') {
+    // 🔥 Explicit close → delete immediately
+    await deleteRoom(roomId);
   }
 
   return NextResponse.json({ success: true });
