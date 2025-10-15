@@ -6,7 +6,7 @@ import {
   addConnection, 
   removeConnection,
   getActiveUsers 
-} from '../../../../lib/ephemeral-store';
+} from '../../../../../lib/ephemeral-store';
 
 export async function GET(request, { params }) {
   const { id: roomId } = params;
