@@ -6,7 +6,7 @@ import {
   addConnection, 
   removeConnection,
   getActiveUsers 
-} from '../../../../../lib/ephemeral-store';
+} from '../../../lib/ephemeral-store'; // ✅ Correct path for root-level lib/
 
 export async function GET(request, { params }) {
   const { id: roomId } = params;
