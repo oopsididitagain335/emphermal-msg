@@ -3,126 +3,56 @@ import { NextResponse } from 'next/server';
 import client from '@/lib/mongodb';
 import { encryptTriple } from '@/lib/crypto';
 
-const DB_NAME = 'chatapp';
-const COLLECTION_NAME = 'rooms';
+const DB = 'chatapp';
+const COLL = 'rooms';
 
-async function getCollection() {
+async function getColl() {
   await client.connect();
-  return client.db(DB_NAME).collection(COLLECTION_NAME);
+  return client.db(DB).collection(COLL);
 }
 
-async function deleteRoom(roomId) {
-  const collection = await getCollection();
-  const result = await collection.deleteOne({ _id: roomId });
-  if (result.deletedCount > 0) {
-    console.log(`🗑️ Room ${roomId} permanently deleted from MongoDB`);
-  }
-  return result.deletedCount > 0;
+async function deleteRoom(id) {
+  const coll = await getColl();
+  await coll.deleteOne({ _id: id });
 }
 
-export async function GET(request, { params }) {
+export async function POST(req, { params }) {
   const { id: roomId } = params;
-  const collection = await getCollection();
-  const room = await collection.findOne({ _id: roomId });
-
-  if (!room || room.activeConnections <= 0) {
-    return NextResponse.json({
-      messages: [],
-      activeUsers: 0,
-      exists: false,
-    });
-  }
-
-  // 🔐 Decrypt messages for response (server-side decryption)
-  const { decryptTriple } = await import('@/lib/crypto');
-  const messages = (room.messages || []).map((msg) => ({
-    ...msg,
-    username: decryptTriple(msg.username),
-    text: decryptTriple(msg.text),
-  }));
-
-  return NextResponse.json({
-    messages,
-    activeUsers: room.activeConnections,
-    exists: true,
-  });
-}
-
-export async function POST(request, { params }) {
-  const { id: roomId } = params;
-  const { username, text } = await request.json();
-
+  const { username, text } = await req.json();
   if (!username?.trim() || !text?.trim()) {
-    return NextResponse.json({ error: 'Username and message required' }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid' }, { status: 400 });
   }
 
-  const collection = await getCollection();
-  const room = await collection.findOne({ _id: roomId });
-
+  const coll = await getColl();
+  const room = await coll.findOne({ _id: roomId });
   if (!room || room.activeConnections <= 0) {
-    return NextResponse.json({ error: 'Room not active' }, { status: 404 });
+    return NextResponse.json({ error: 'Room closed' }, { status: 404 });
   }
 
-  const encryptedMsg = {
+  const msg = {
     id: Date.now().toString(),
     username: encryptTriple(username.trim()),
     text: encryptTriple(text.trim()),
-    timestamp: new Date().toISOString(),
+    timestamp: new Date().toISOString()
   };
 
-  // Push message, keep only last 100
-  await collection.updateOne(
+  await coll.updateOne(
     { _id: roomId },
-    {
-      $push: {
-        messages: {
-          $each: [encryptedMsg],
-          $slice: -100,
-        },
-      },
-    }
+    { $push: { messages: { $each: [msg], $slice: -100 } } }
   );
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ ok: true });
 }
 
-export async function PUT(request, { params }) {
+export async function PUT(req, { params }) {
   const { id: roomId } = params;
-  const { action } = await request.json();
+  const { action } = await req.json();
+  const coll = await getColl();
 
-  const collection = await getCollection();
-
-  if (action === 'join') {
-    await collection.updateOne(
-      { _id: roomId },
-      {
-        $setOnInsert: { createdAt: new Date(), messages: [] },
-        $inc: { activeConnections: 1 },
-      },
-      { upsert: true }
-    );
-  } 
-  else if (action === 'leave') {
-    const room = await collection.findOne({ _id: roomId });
-    if (!room) return NextResponse.json({ success: true });
-
-    const newCount = Math.max(0, (room.activeConnections || 1) - 1);
-    if (newCount === 0) {
-      await deleteRoom(roomId);
-    } else {
-      await collection.updateOne(
-        { _id: roomId },
-        { $set: { activeConnections: newCount } }
-      );
-    }
-  } 
-  else if (action === 'close') {
-    // Host explicitly closes room → delete immediately
+  if (action === 'close') {
     await deleteRoom(roomId);
-  } 
-  else {
-    return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+    return NextResponse.json({ ok: true });
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
 }
