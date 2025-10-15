@@ -1,7 +1,7 @@
 // app/api/room/[id]/route.js
 import { NextResponse } from 'next/server';
 import client from '@/lib/mongodb';
-import { encryptTriple, decryptTriple } from '@/lib/crypto';
+import { encryptTriple } from '@/lib/crypto';
 
 const DB_NAME = 'chatapp';
 const COLLECTION_NAME = 'rooms';
@@ -13,8 +13,11 @@ async function getCollection() {
 
 async function deleteRoom(roomId) {
   const collection = await getCollection();
-  await collection.deleteOne({ _id: roomId });
-  console.log(`🗑️ Room ${roomId} permanently deleted from MongoDB`);
+  const result = await collection.deleteOne({ _id: roomId });
+  if (result.deletedCount > 0) {
+    console.log(`🗑️ Room ${roomId} permanently deleted from MongoDB`);
+  }
+  return result.deletedCount > 0;
 }
 
 export async function GET(request, { params }) {
@@ -30,8 +33,9 @@ export async function GET(request, { params }) {
     });
   }
 
-  // Decrypt messages for display (server-side decryption)
-  const messages = (room.messages || []).map(msg => ({
+  // 🔐 Decrypt messages for response (server-side decryption)
+  const { decryptTriple } = await import('@/lib/crypto');
+  const messages = (room.messages || []).map((msg) => ({
     ...msg,
     username: decryptTriple(msg.username),
     text: decryptTriple(msg.text),
@@ -66,7 +70,7 @@ export async function POST(request, { params }) {
     timestamp: new Date().toISOString(),
   };
 
-  // Push and keep only last 100
+  // Push message, keep only last 100
   await collection.updateOne(
     { _id: roomId },
     {
@@ -84,7 +88,7 @@ export async function POST(request, { params }) {
 
 export async function PUT(request, { params }) {
   const { id: roomId } = params;
-  const { action } = await request.json(); // connectionId not needed for counting
+  const { action } = await request.json();
 
   const collection = await getCollection();
 
@@ -92,10 +96,7 @@ export async function PUT(request, { params }) {
     await collection.updateOne(
       { _id: roomId },
       {
-        $setOnInsert: {
-          createdAt: new Date(),
-          messages: [],
-        },
+        $setOnInsert: { createdAt: new Date(), messages: [] },
         $inc: { activeConnections: 1 },
       },
       { upsert: true }
